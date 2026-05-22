@@ -1,0 +1,187 @@
+/health:
+  get:
+    tags: [Health]
+    summary: Verifica se a API está no ar
+    responses:
+      "200":
+        description: OK
+
+/funcoes:
+  get:
+    tags: [Funções]
+    summary: Lista funções litúrgicas
+    security:
+      - bearerAuth: []
+    responses:
+      "200":
+        description: Catálogo de funções
+
+/users:
+  get:
+    tags: [Usuários]
+    summary: Lista servidores/coordenadores
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: incluirInativos
+        schema:
+          type: boolean
+    responses:
+      "200":
+        description: Lista de usuários
+
+/users/{userId}:
+  patch:
+    tags: [Usuários]
+    summary: Desativa ou reativa usuário
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: userId
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ativo]
+            properties:
+              ativo:
+                type: boolean
+    responses:
+      "200":
+        description: Usuário atualizado
+
+/disponibilidades:
+  get:
+    tags: [Disponibilidades]
+    summary: Lista disponibilidades do usuário logado (ou userId para staff)
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: mesAno
+        schema:
+          type: string
+          example: "2025-06"
+      - in: query
+        name: userId
+        schema:
+          type: string
+          format: uuid
+        description: Apenas coordenador/admin
+    responses:
+      "200":
+        description: Lista de marcações
+  put:
+    tags: [Disponibilidades]
+    summary: Salva disponibilidade em lote (usuário logado)
+    security:
+      - bearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [mesAno, itens]
+            properties:
+              mesAno:
+                type: string
+                example: "2025-06"
+              itens:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    data:
+                      type: string
+                      example: "2025-06-08"
+                    horario:
+                      type: string
+                      enum: [H09, H18]
+                    status:
+                      type: string
+                      enum: [DISPONIVEL, INDISPONIVEL]
+    responses:
+      "200":
+        description: Atualizado
+
+/missas:
+  get:
+    tags: [Missas]
+    summary: Lista missas
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: query
+        name: de
+        schema: { type: string, format: date }
+      - in: query
+        name: ate
+        schema: { type: string, format: date }
+    responses:
+      "200":
+        description: Lista de missas
+  post:
+    tags: [Missas]
+    summary: Cria missa (coordenador/admin)
+    security:
+      - bearerAuth: []
+    responses:
+      "201":
+        description: Missa criada
+
+/missas/{missaId}/servidores-disponiveis:
+  get:
+    tags: [Missas]
+    summary: Servidores disponíveis para escalar (combobox)
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: missaId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: query
+        name: funcaoId
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: Lista filtrada por data/horário da missa
+
+/missas/{missaId}/escalas:
+  post:
+    tags: [Missas]
+    summary: Atribui servidor à função (valida disponibilidade)
+    security:
+      - bearerAuth: []
+    parameters:
+      - in: path
+        name: missaId
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [funcaoId, userId]
+            properties:
+              funcaoId: { type: string, format: uuid }
+              userId: { type: string, format: uuid }
+              vaga: { type: integer, default: 1 }
+    responses:
+      "201":
+        description: Escala criada

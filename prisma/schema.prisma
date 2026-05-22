@@ -1,0 +1,163 @@
+// EscalaAltar — Gestão de escalas para Acólitos e Coroinhas
+// PostgreSQL (Supabase) + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum PapelUsuario {
+  SERVIDOR
+  COORDENADOR
+  ADMIN
+}
+
+enum TipoMissa {
+  DOMINICAL // padrão: domingo 9h / 18h
+  ESPECIAL  // quinta-feira santa, casamento, solenidade etc.
+}
+
+enum HorarioMissa {
+  H09 // 09:00
+  H18 // 18:00
+}
+
+enum StatusDisponibilidade {
+  DISPONIVEL
+  INDISPONIVEL
+}
+
+// ---------------------------------------------------------------------------
+// Usuários — autenticação JWT no backend (senha com bcrypt)
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  nome         String
+  telefone     String?
+  ativo        Boolean      @default(true)
+  papel        PapelUsuario @default(SERVIDOR)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  disponibilidades Disponibilidade[]
+  escalas          Escala[]
+
+  @@index([papel, ativo])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Funções litúrgicas (catálogo fixo; seed na migration)
+// ---------------------------------------------------------------------------
+
+model Funcao {
+  id        String   @id @default(uuid()) @db.Uuid
+  codigo    String   @unique // ex: MC, ALTAR, CRUZ
+  nome      String   // ex: "Mestre de Cerimônias"
+  descricao String?
+  ordem     Int      @default(0) // exibição no painel do coordenador
+  padrao    Boolean  @default(true) // função costuma aparecer em missas dominicais
+  ativo     Boolean  @default(true)
+
+  missaFuncoes MissaFuncao[]
+  escalas      Escala[]
+
+  @@map("funcoes")
+}
+
+// ---------------------------------------------------------------------------
+// Missas (dominicais fixas + especiais criadas pelo coordenador)
+// ---------------------------------------------------------------------------
+
+model Missa {
+  id          String       @id @default(uuid()) @db.Uuid
+  titulo      String?      // obrigatório conceitualmente para ESPECIAL (ex: "Casamento João e Maria")
+  data        DateTime     @db.Date
+  horario     HorarioMissa
+  tipo        TipoMissa    @default(DOMINICAL)
+  observacoes String?
+  ativa       Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  funcoes MissaFuncao[]
+  escalas Escala[]
+
+  @@unique([data, horario]) // uma celebração por data+horário (dominical ou especial)
+  @@index([data, horario])
+  @@index([tipo, ativa])
+  @@map("missas")
+}
+
+// Funções habilitadas para uma missa específica (liga/desliga por celebração)
+model MissaFuncao {
+  id         String  @id @default(uuid()) @db.Uuid
+  missaId    String  @map("missa_id") @db.Uuid
+  funcaoId   String  @map("funcao_id") @db.Uuid
+  quantidade Int     @default(1) // vagas na função (ex: 2 ceroferários)
+  obrigatoria Boolean @default(true)
+
+  missa  Missa  @relation(fields: [missaId], references: [id], onDelete: Cascade)
+  funcao Funcao @relation(fields: [funcaoId], references: [id], onDelete: Restrict)
+
+  @@unique([missaId, funcaoId])
+  @@map("missa_funcoes")
+}
+
+// ---------------------------------------------------------------------------
+// Disponibilidade mensal (servidor marca domingos + horário no mês alvo)
+// ---------------------------------------------------------------------------
+
+model Disponibilidade {
+  id        String                @id @default(uuid()) @db.Uuid
+  userId    String                @map("user_id") @db.Uuid
+  // Mês de referência da coleta (ex: servidor preenche em maio para junho)
+  mesAno    DateTime              @map("mes_ano") @db.Date // sempre dia 1 do mês (YYYY-MM-01)
+  data      DateTime              @db.Date // domingo ou data da missa especial marcada
+  horario   HorarioMissa
+  status    StatusDisponibilidade @default(DISPONIVEL)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, mesAno, data, horario])
+  @@index([data, horario, status])
+  @@index([mesAno, userId])
+  @@map("disponibilidades")
+}
+
+// ---------------------------------------------------------------------------
+// Escala — quem exerce qual função em qual missa
+// (mesmo usuário pode ter várias funções na mesma missa)
+// ---------------------------------------------------------------------------
+
+model Escala {
+  id        String   @id @default(uuid()) @db.Uuid
+  missaId   String   @map("missa_id") @db.Uuid
+  funcaoId  String   @map("funcao_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  vaga      Int      @default(1) // slot quando quantidade > 1 na MissaFuncao
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  missa  Missa  @relation(fields: [missaId], references: [id], onDelete: Cascade)
+  funcao Funcao @relation(fields: [funcaoId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([missaId, funcaoId, userId, vaga])
+  @@index([missaId])
+  @@index([userId, missaId])
+  @@map("escalas")
+}
