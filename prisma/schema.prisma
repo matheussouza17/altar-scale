@@ -25,11 +25,6 @@ enum TipoMissa {
   ESPECIAL  // quinta-feira santa, casamento, solenidade etc.
 }
 
-enum HorarioMissa {
-  H09 // 09:00
-  H18 // 18:00
-}
-
 enum StatusDisponibilidade {
   DISPONIVEL
   INDISPONIVEL
@@ -84,7 +79,7 @@ model Missa {
   id          String       @id @default(uuid()) @db.Uuid
   titulo      String?      // obrigatório conceitualmente para ESPECIAL (ex: "Casamento João e Maria")
   data        DateTime     @db.Date
-  horario     HorarioMissa
+  horario     String       // "HH:MM" — ex: "09:00", "18:00", "19:30"
   tipo        TipoMissa    @default(DOMINICAL)
   observacoes String?
   ativa       Boolean      @default(true)
@@ -126,7 +121,7 @@ model Disponibilidade {
   // Mês de referência da coleta (ex: servidor preenche em maio para junho)
   mesAno    DateTime              @map("mes_ano") @db.Date // sempre dia 1 do mês (YYYY-MM-01)
   data      DateTime              @db.Date // domingo ou data da missa especial marcada
-  horario   HorarioMissa
+  horario   String               // "HH:MM" — ex: "09:00", "18:00", "21:00"
   status    StatusDisponibilidade @default(DISPONIVEL)
   createdAt DateTime              @default(now()) @map("created_at")
   updatedAt DateTime              @updatedAt @map("updated_at")

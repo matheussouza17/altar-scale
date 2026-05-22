@@ -177,7 +177,7 @@ export async function exportarEscala(missaId: string): Promise<string> {
   const dia = String(data.getUTCDate()).padStart(2, "0");
   const mes = MESES[data.getUTCMonth()];
   const ano = data.getUTCFullYear();
-  const horario = missa.horario === "H09" ? "09h00" : "18h00";
+  const horario = missa.horario.replace(":", "h"); // "09:00" → "09h00"
   const titulo = missa.titulo ? ` — ${missa.titulo}` : "";
 
   const linhas: string[] = [

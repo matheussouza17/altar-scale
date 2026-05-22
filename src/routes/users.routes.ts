@@ -5,6 +5,7 @@ import { authenticate, requireRole } from "../middleware/auth.js";
 import * as userService from "../services/user.service.js";
 import {
   atualizarStatusUserSchema,
+  editarUsuarioSchema,
   listarUsersQuerySchema,
   userIdParamSchema,
 } from "../validators/user.validator.js";
@@ -36,6 +37,17 @@ usersRouter.get(
   }),
 );
 
+/** PUT /api/users/:userId — edita nome e/ou telefone */
+usersRouter.put(
+  "/:userId",
+  asyncHandler(async (req, res) => {
+    const { userId } = userIdParamSchema.parse(req.params);
+    const input = editarUsuarioSchema.parse(req.body);
+    const user = await userService.editarUsuario(userId, input, req.user!);
+    res.json({ data: user });
+  }),
+);
+
 /**
  * PATCH /api/users/:userId
  * Desativa ou reativa usuário (`{ "ativo": false }`).
@@ -51,5 +63,15 @@ usersRouter.patch(
       req.user!,
     );
     res.json({ data: user });
+  }),
+);
+
+/** DELETE /api/users/:userId — remove permanentemente se não tiver escalas */
+usersRouter.delete(
+  "/:userId",
+  asyncHandler(async (req, res) => {
+    const { userId } = userIdParamSchema.parse(req.params);
+    const result = await userService.excluirUsuario(userId, req.user!);
+    res.json({ data: result });
   }),
 );

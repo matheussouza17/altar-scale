@@ -1,7 +1,8 @@
-import { HorarioMissa, TipoMissa } from "@prisma/client";
+import { TipoMissa } from "@prisma/client";
 import { z } from "zod";
 
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const horarioStr = z.string().regex(/^\d{2}:\d{2}$/, 'Use formato "HH:MM", ex: "09:00"');
 
 export const missaIdParamSchema = z.object({
   missaId: z.string().uuid(),
@@ -10,7 +11,7 @@ export const missaIdParamSchema = z.object({
 export const createMissaSchema = z.object({
   titulo: z.string().min(1).optional(),
   data: dataIso,
-  horario: z.nativeEnum(HorarioMissa),
+  horario: horarioStr,
   tipo: z.nativeEnum(TipoMissa).default(TipoMissa.DOMINICAL),
   observacoes: z.string().optional(),
   /** IDs das funções ativas nesta missa; omitido = funções com padrao=true */
@@ -19,6 +20,7 @@ export const createMissaSchema = z.object({
 
 export const updateMissaSchema = createMissaSchema.partial().extend({
   ativa: z.boolean().optional(),
+  horario: horarioStr.optional(),
   funcaoIds: z.array(z.string().uuid()).optional(),
 });
 

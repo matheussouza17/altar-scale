@@ -30,16 +30,18 @@ disponibilidadesRouter.get(
 );
 
 /**
- * PUT /api/disponibilidades — servidor salva o próprio mês
+ * PUT /api/disponibilidades — salva disponibilidade.
+ * Servidor salva a própria; coordenador/admin pode passar ?userId= para salvar por outro.
  */
 disponibilidadesRouter.put(
   "/",
   asyncHandler(async (req, res) => {
+    const { userId: targetId } = disponibilidadeQuerySchema.parse(req.query);
+    const userId = targetId ?? req.user!.id;
+    assertSelfOrStaff(userId, req);
+
     const body = disponibilidadeBulkSchema.parse(req.body);
-    const result = await disponibilidadeService.salvarDisponibilidadesUsuario(
-      req.user!.id,
-      body,
-    );
+    const result = await disponibilidadeService.salvarDisponibilidadesUsuario(userId, body);
     res.json({ data: result });
   }),
 );

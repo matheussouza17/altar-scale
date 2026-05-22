@@ -1,7 +1,7 @@
-import { HorarioMissa, StatusDisponibilidade } from "@prisma/client";
+import { StatusDisponibilidade } from "@prisma/client";
 import { z } from "zod";
 
-const horarioEnum = z.nativeEnum(HorarioMissa);
+const horarioEnum = z.string().regex(/^\d{2}:\d{2}$/, 'Use formato "HH:MM"');
 const statusEnum = z.nativeEnum(StatusDisponibilidade);
 
 /** YYYY-MM-DD */

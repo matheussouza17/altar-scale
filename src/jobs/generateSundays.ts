@@ -25,8 +25,8 @@ export async function generateSundaysForMonth(year: number, month: number) {
   const records = days.flatMap((day) => {
     const data = new Date(Date.UTC(year, month - 1, day));
     return [
-      { data, horario: "H09" as const, tipo: "DOMINICAL" as const },
-      { data, horario: "H18" as const, tipo: "DOMINICAL" as const },
+      { data, horario: "09:00", tipo: "DOMINICAL" as const },
+      { data, horario: "18:00", tipo: "DOMINICAL" as const },
     ];
   });
 
