@@ -113,6 +113,7 @@ export async function obterMissa(missaId: string) {
 }
 
 export async function listarMissas(params: {
+  mesAno?: string;
   de?: string;
   ate?: string;
   tipo?: TipoMissa;
@@ -122,7 +123,14 @@ export async function listarMissas(params: {
 
   if (params.tipo) where.tipo = params.tipo;
   if (params.ativa !== undefined) where.ativa = params.ativa;
-  if (params.de || params.ate) {
+
+  if (params.mesAno) {
+    const [y, m] = params.mesAno.split("-").map(Number);
+    where.data = {
+      gte: new Date(Date.UTC(y, m - 1, 1)),
+      lte: new Date(Date.UTC(y, m, 0)),
+    };
+  } else if (params.de || params.ate) {
     where.data = {};
     if (params.de) where.data.gte = parseDataIso(params.de);
     if (params.ate) where.data.lte = parseDataIso(params.ate);
@@ -135,6 +143,101 @@ export async function listarMissas(params: {
       _count: { select: { escalas: true } },
     },
     orderBy: [{ data: "asc" }, { horario: "asc" }],
+  });
+}
+
+const DIAS_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const MESES = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+];
+
+export async function exportarEscala(missaId: string): Promise<string> {
+  const missa = await prisma.missa.findUnique({
+    where: { id: missaId },
+    include: {
+      funcoes: {
+        include: { funcao: true },
+        orderBy: { funcao: { ordem: "asc" } },
+      },
+      escalas: {
+        include: {
+          user: { select: { nome: true } },
+          funcao: { select: { codigo: true, nome: true, ordem: true } },
+        },
+        orderBy: [{ funcao: { ordem: "asc" } }, { vaga: "asc" }],
+      },
+    },
+  });
+
+  if (!missa) throw new AppError("Missa não encontrada.", 404, "MISSA_NOT_FOUND");
+
+  const data = missa.data;
+  const diaSemana = DIAS_SEMANA[data.getUTCDay()];
+  const dia = String(data.getUTCDate()).padStart(2, "0");
+  const mes = MESES[data.getUTCMonth()];
+  const ano = data.getUTCFullYear();
+  const horario = missa.horario === "H09" ? "09h00" : "18h00";
+  const titulo = missa.titulo ? ` — ${missa.titulo}` : "";
+
+  const linhas: string[] = [
+    `📋 *ESCALA — ${diaSemana}, ${dia} de ${mes} de ${ano} · ${horario}*${titulo}`,
+    `${"─".repeat(45)}`,
+  ];
+
+  // Agrupa escalas por função (mantendo a ordem)
+  const porFuncao = new Map<string, { nome: string; servidores: string[] }>();
+  for (const mf of missa.funcoes) {
+    porFuncao.set(mf.funcaoId, { nome: mf.funcao.nome, servidores: [] });
+  }
+  for (const e of missa.escalas) {
+    const entry = porFuncao.get(e.funcaoId);
+    if (entry) entry.servidores.push(e.user.nome);
+  }
+
+  for (const [, { nome, servidores }] of porFuncao) {
+    const valor = servidores.length > 0 ? servidores.join(" / ") : "_em aberto_";
+    linhas.push(`*${nome}:* ${valor}`);
+  }
+
+  if (missa.publicadaEm) {
+    const pub = missa.publicadaEm;
+    linhas.push("");
+    linhas.push(
+      `_Publicada em ${String(pub.getUTCDate()).padStart(2, "0")}/${String(pub.getUTCMonth() + 1).padStart(2, "0")}/${pub.getUTCFullYear()}_`,
+    );
+  }
+
+  return linhas.join("\n");
+}
+
+export async function publicarMissa(missaId: string) {
+  const missa = await prisma.missa.findUnique({ where: { id: missaId } });
+  if (!missa) throw new AppError("Missa não encontrada.", 404, "MISSA_NOT_FOUND");
+  if (missa.publicadaEm) throw new AppError("Escala já publicada.", 409, "ALREADY_PUBLISHED");
+
+  return prisma.missa.update({
+    where: { id: missaId },
+    data: { publicadaEm: new Date() },
+    include: {
+      funcoes: { include: { funcao: true } },
+      escalas: { include: { user: { select: { id: true, nome: true } }, funcao: true } },
+    },
+  });
+}
+
+export async function despublicarMissa(missaId: string) {
+  const missa = await prisma.missa.findUnique({ where: { id: missaId } });
+  if (!missa) throw new AppError("Missa não encontrada.", 404, "MISSA_NOT_FOUND");
+  if (!missa.publicadaEm) throw new AppError("Escala não está publicada.", 409, "NOT_PUBLISHED");
+
+  return prisma.missa.update({
+    where: { id: missaId },
+    data: { publicadaEm: null },
+    include: {
+      funcoes: { include: { funcao: true } },
+      escalas: { include: { user: { select: { id: true, nome: true } }, funcao: true } },
+    },
   });
 }
 

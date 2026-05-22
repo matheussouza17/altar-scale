@@ -20,12 +20,13 @@ const staffOnly = requireRole(PapelUsuario.COORDENADOR, PapelUsuario.ADMIN);
 
 missasRouter.use(authenticate);
 
-/** GET /api/missas?de=&ate=&tipo=&ativa= */
+/** GET /api/missas?mesAno=2025-07  ou  ?de=&ate=&tipo=&ativa= */
 missasRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     const query = z
       .object({
+        mesAno: z.string().regex(/^\d{4}-\d{2}$/).optional(),
         de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         tipo: z.nativeEnum(TipoMissa).optional(),
@@ -102,6 +103,38 @@ missasRouter.delete(
       .parse(req.params);
     const result = await escalaService.removerEscala(missaId, escalaId);
     res.json({ data: result });
+  }),
+);
+
+/** GET /api/missas/:missaId/exportar — retorna texto formatado para compartilhar */
+missasRouter.get(
+  "/:missaId/exportar",
+  asyncHandler(async (req, res) => {
+    const { missaId } = missaIdParamSchema.parse(req.params);
+    const texto = await missaService.exportarEscala(missaId);
+    res.json({ data: { texto } });
+  }),
+);
+
+/** PATCH /api/missas/:missaId/publicar — coordenador fecha e publica a escala */
+missasRouter.patch(
+  "/:missaId/publicar",
+  staffOnly,
+  asyncHandler(async (req, res) => {
+    const { missaId } = missaIdParamSchema.parse(req.params);
+    const missa = await missaService.publicarMissa(missaId);
+    res.json({ data: missa });
+  }),
+);
+
+/** PATCH /api/missas/:missaId/despublicar — desfaz publicação (correções) */
+missasRouter.patch(
+  "/:missaId/despublicar",
+  staffOnly,
+  asyncHandler(async (req, res) => {
+    const { missaId } = missaIdParamSchema.parse(req.params);
+    const missa = await missaService.despublicarMissa(missaId);
+    res.json({ data: missa });
   }),
 );
 
