@@ -1,6 +1,59 @@
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 
+function gerarCodigo(nome: string): string {
+  return nome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 10);
+}
+
+export async function criarFuncao(input: {
+  nome: string;
+  descricao?: string | null;
+  padrao?: boolean;
+  ordem?: number;
+}) {
+  let base = gerarCodigo(input.nome);
+  if (!base) base = "FUNC";
+
+  // Resolve conflito de código único
+  let codigo = base;
+  let suffix = 1;
+  while (await prisma.funcao.findUnique({ where: { codigo } })) {
+    codigo = `${base.slice(0, 8)}${suffix}`;
+    suffix++;
+  }
+
+  return prisma.funcao.create({
+    data: {
+      codigo,
+      nome: input.nome,
+      descricao: input.descricao ?? null,
+      padrao: input.padrao ?? false,
+      ordem: input.ordem ?? 0,
+    },
+  });
+}
+
+export async function excluirFuncao(funcaoId: string) {
+  const funcao = await prisma.funcao.findUnique({ where: { id: funcaoId } });
+  if (!funcao) throw new AppError("Função não encontrada.", 404, "FUNCAO_NOT_FOUND");
+
+  const emUso = await prisma.missaFuncao.count({ where: { funcaoId } });
+  if (emUso > 0) {
+    throw new AppError(
+      "Função está vinculada a missas e não pode ser excluída. Desative-a em vez disso.",
+      409,
+      "FUNCAO_IN_USE",
+    );
+  }
+
+  await prisma.funcao.delete({ where: { id: funcaoId } });
+}
+
 export async function listarFuncoes(apenasAtivas = true) {
   return prisma.funcao.findMany({
     where: apenasAtivas ? { ativo: true } : undefined,

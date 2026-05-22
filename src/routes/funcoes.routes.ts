@@ -23,6 +23,24 @@ funcoesRouter.get(
   }),
 );
 
+/** POST /api/funcoes */
+funcoesRouter.post(
+  "/",
+  staffOnly,
+  asyncHandler(async (req, res) => {
+    const input = z
+      .object({
+        nome: z.string().min(2).max(80),
+        descricao: z.string().max(200).nullable().optional(),
+        padrao: z.boolean().optional(),
+        ordem: z.number().int().min(0).optional(),
+      })
+      .parse(req.body);
+    const funcao = await funcaoService.criarFuncao(input);
+    res.status(201).json({ data: funcao });
+  }),
+);
+
 /** PATCH /api/funcoes/:funcaoId */
 funcoesRouter.patch(
   "/:funcaoId",
@@ -40,5 +58,16 @@ funcoesRouter.patch(
       .parse(req.body);
     const funcao = await funcaoService.editarFuncao(funcaoId, input);
     res.json({ data: funcao });
+  }),
+);
+
+/** DELETE /api/funcoes/:funcaoId */
+funcoesRouter.delete(
+  "/:funcaoId",
+  staffOnly,
+  asyncHandler(async (req, res) => {
+    const { funcaoId } = z.object({ funcaoId: z.string().uuid() }).parse(req.params);
+    await funcaoService.excluirFuncao(funcaoId);
+    res.status(204).send();
   }),
 );
