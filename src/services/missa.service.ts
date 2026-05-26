@@ -145,7 +145,7 @@ export async function listarMissas(params: {
   if (params.mesAno) {
     const [y, m] = params.mesAno.split("-").map(Number);
     where.data = {
-      gte: new Date(Date.UTC(y, m - 1, 1)),
+      gte: params.de ? parseDataIso(params.de) : new Date(Date.UTC(y, m - 1, 1)),
       lte: new Date(Date.UTC(y, m, 0)),
     };
   } else if (params.de || params.ate) {

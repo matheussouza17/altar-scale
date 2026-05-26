@@ -15,6 +15,7 @@ export async function criarFuncao(input: {
   descricao?: string | null;
   padrao?: boolean;
   ordem?: number;
+  quantidadePadrao?: number;
 }) {
   let base = gerarCodigo(input.nome);
   if (!base) base = "FUNC";
@@ -34,6 +35,7 @@ export async function criarFuncao(input: {
       descricao: input.descricao ?? null,
       padrao: input.padrao ?? false,
       ordem: input.ordem ?? 0,
+      quantidadePadrao: input.quantidadePadrao ?? 1,
     },
   });
 }
@@ -63,7 +65,7 @@ export async function listarFuncoes(apenasAtivas = true) {
 
 export async function editarFuncao(
   funcaoId: string,
-  input: { nome?: string; descricao?: string | null; padrao?: boolean; ativo?: boolean; ordem?: number },
+  input: { nome?: string; descricao?: string | null; padrao?: boolean; ativo?: boolean; ordem?: number; quantidadePadrao?: number },
 ) {
   const funcao = await prisma.funcao.findUnique({ where: { id: funcaoId } });
   if (!funcao) throw new AppError("Função não encontrada.", 404, "FUNCAO_NOT_FOUND");
@@ -76,6 +78,7 @@ export async function editarFuncao(
       ...(input.padrao !== undefined && { padrao: input.padrao }),
       ...(input.ativo !== undefined && { ativo: input.ativo }),
       ...(input.ordem !== undefined && { ordem: input.ordem }),
+      ...(input.quantidadePadrao !== undefined && { quantidadePadrao: input.quantidadePadrao }),
     },
   });
 }

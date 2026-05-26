@@ -34,6 +34,7 @@ funcoesRouter.post(
         descricao: z.string().max(200).nullable().optional(),
         padrao: z.boolean().optional(),
         ordem: z.number().int().min(0).optional(),
+        quantidadePadrao: z.number().int().min(1).max(20).optional(),
       })
       .parse(req.body);
     const funcao = await funcaoService.criarFuncao(input);
@@ -54,6 +55,7 @@ funcoesRouter.patch(
         padrao: z.boolean().optional(),
         ativo: z.boolean().optional(),
         ordem: z.number().int().min(0).optional(),
+        quantidadePadrao: z.number().int().min(1).max(20).optional(),
       })
       .parse(req.body);
     const funcao = await funcaoService.editarFuncao(funcaoId, input);
