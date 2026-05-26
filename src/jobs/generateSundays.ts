@@ -10,12 +10,11 @@ function getSundays(year: number, month: number): number[] {
   return sundays;
 }
 
-async function funcoesPadraoIds(): Promise<string[]> {
-  const rows = await prisma.funcao.findMany({
+async function funcoesPadrao(): Promise<{ id: string; quantidadePadrao: number }[]> {
+  return prisma.funcao.findMany({
     where: { padrao: true, ativo: true },
-    select: { id: true },
+    select: { id: true, quantidadePadrao: true },
   });
-  return rows.map((r) => r.id);
 }
 
 export async function generateSundaysForMonth(year: number, month: number) {
@@ -42,10 +41,10 @@ export async function generateSundaysForMonth(year: number, month: number) {
         select: { id: true },
       });
 
-      const funcaoIds = await funcoesPadraoIds();
-      if (funcaoIds.length > 0) {
+      const funcoes = await funcoesPadrao();
+      if (funcoes.length > 0) {
         const missaFuncoes = missasCriadas.flatMap((m) =>
-          funcaoIds.map((funcaoId) => ({ missaId: m.id, funcaoId })),
+          funcoes.map((f) => ({ missaId: m.id, funcaoId: f.id, quantidade: f.quantidadePadrao })),
         );
         await prisma.missaFuncao.createMany({ data: missaFuncoes, skipDuplicates: true });
       }

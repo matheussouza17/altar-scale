@@ -3,7 +3,9 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import { authenticate, requireRole } from "../middleware/auth.js";
 import { PapelUsuario } from "@prisma/client";
 import * as authService from "../services/auth.service.js";
+import * as userService from "../services/user.service.js";
 import {
+  alterarSenhaSchema,
   criarUsuarioSchema,
   loginSchema,
   registerSchema,
@@ -97,5 +99,34 @@ authRouter.post(
     const body = criarUsuarioSchema.parse(req.body);
     const token = await authService.criarUsuario(body, req.user!.papel);
     res.status(201).json({ token });
+  }),
+);
+
+/**
+ * @openapi
+ * /auth/senha:
+ *   patch:
+ *     tags: [Auth]
+ *     summary: Usuário autenticado altera a própria senha
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [senhaAtual, novaSenha]
+ *             properties:
+ *               senhaAtual: { type: string }
+ *               novaSenha: { type: string, minLength: 8 }
+ */
+authRouter.patch(
+  "/senha",
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const body = alterarSenhaSchema.parse(req.body);
+    const result = await userService.alterarSenha(req.user!.id, body);
+    res.json({ data: result });
   }),
 );

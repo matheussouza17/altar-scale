@@ -22,6 +22,12 @@ export const criarUsuarioSchema = registerSchema.extend({
   papel: z.nativeEnum(PapelUsuario).default(PapelUsuario.SERVIDOR),
 });
 
+export const alterarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1),
+  novaSenha: senhaSchema,
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type CriarUsuarioInput = z.infer<typeof criarUsuarioSchema>;
+export type AlterarSenhaInput = z.infer<typeof alterarSenhaSchema>;

@@ -1,7 +1,13 @@
 import { z } from "zod";
 
+const senhaSchema = z.string().min(8, "Senha deve ter no mínimo 8 caracteres").max(128);
+
 export const userIdParamSchema = z.object({
   userId: z.string().uuid(),
+});
+
+export const resetarSenhaSchema = z.object({
+  novaSenha: senhaSchema,
 });
 
 export const listarUsersQuerySchema = z.object({

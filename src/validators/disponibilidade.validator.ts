@@ -12,18 +12,23 @@ export const mesAnoParamSchema = z.object({
   mesAno: z.string().regex(/^\d{4}-\d{2}$/, "Use formato YYYY-MM"),
 });
 
-export const disponibilidadeBulkSchema = z.object({
-  mesAno: z.string().regex(/^\d{4}-\d{2}$/),
-  itens: z
-    .array(
-      z.object({
-        data: dataIso,
-        horario: horarioEnum,
-        status: statusEnum.default(StatusDisponibilidade.DISPONIVEL),
-      }),
-    )
-    .min(1),
-});
+export const disponibilidadeBulkSchema = z
+  .object({
+    mesAno: z.string().regex(/^\d{4}-\d{2}$/, "Use formato YYYY-MM"),
+    itens: z
+      .array(
+        z.object({
+          data: dataIso,
+          horario: horarioEnum,
+          status: statusEnum.default(StatusDisponibilidade.DISPONIVEL),
+        }),
+      )
+      .min(1),
+  })
+  .refine(
+    ({ mesAno, itens }) => itens.every((i) => i.data.startsWith(mesAno)),
+    { message: "Todas as datas devem pertencer ao mês declarado em mesAno." },
+  );
 
 export const disponibilidadeQuerySchema = z.object({
   mesAno: z.string().regex(/^\d{4}-\d{2}$/).optional(),

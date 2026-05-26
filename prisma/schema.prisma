@@ -57,13 +57,14 @@ model User {
 // ---------------------------------------------------------------------------
 
 model Funcao {
-  id        String   @id @default(uuid()) @db.Uuid
-  codigo    String   @unique // ex: MC, ALTAR, CRUZ
-  nome      String   // ex: "Mestre de Cerimônias"
-  descricao String?
-  ordem     Int      @default(0) // exibição no painel do coordenador
-  padrao    Boolean  @default(true) // função costuma aparecer em missas dominicais
-  ativo     Boolean  @default(true)
+  id              String   @id @default(uuid()) @db.Uuid
+  codigo          String   @unique // ex: MC, ALTAR, CRUZ
+  nome            String   // ex: "Mestre de Cerimônias"
+  descricao       String?
+  ordem           Int      @default(0) // exibição no painel do coordenador
+  padrao          Boolean  @default(true) // função costuma aparecer em missas dominicais
+  quantidadePadrao Int     @default(1) @map("quantidade_padrao") // vagas padrão ao vincular a uma missa
+  ativo           Boolean  @default(true)
 
   missaFuncoes MissaFuncao[]
   escalas      Escala[]
@@ -118,19 +119,16 @@ model MissaFuncao {
 model Disponibilidade {
   id        String                @id @default(uuid()) @db.Uuid
   userId    String                @map("user_id") @db.Uuid
-  // Mês de referência da coleta (ex: servidor preenche em maio para junho)
-  mesAno    DateTime              @map("mes_ano") @db.Date // sempre dia 1 do mês (YYYY-MM-01)
   data      DateTime              @db.Date // domingo ou data da missa especial marcada
-  horario   String               // "HH:MM" — ex: "09:00", "18:00", "21:00"
+  horario   String                // "HH:MM" — ex: "09:00", "18:00", "21:00"
   status    StatusDisponibilidade @default(DISPONIVEL)
   createdAt DateTime              @default(now()) @map("created_at")
   updatedAt DateTime              @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, mesAno, data, horario])
-  @@index([data, horario, status])
-  @@index([mesAno, userId])
+  @@unique([userId, data, horario])
+  @@index([data, horario, status, userId]) // índice de cobertura para o dropdown do coordenador
   @@map("disponibilidades")
 }
 
@@ -144,16 +142,19 @@ model Escala {
   missaId   String   @map("missa_id") @db.Uuid
   funcaoId  String   @map("funcao_id") @db.Uuid
   userId    String   @map("user_id") @db.Uuid
-  vaga      Int      @default(1) // slot quando quantidade > 1 na MissaFuncao
-  createdAt DateTime @default(now()) @map("created_at")
+  vaga       Int      @default(1) // slot quando quantidade > 1 na MissaFuncao
+  observacao String?  // observação do coordenador para esta função nesta celebração
+  createdAt  DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   missa  Missa  @relation(fields: [missaId], references: [id], onDelete: Cascade)
   funcao Funcao @relation(fields: [funcaoId], references: [id], onDelete: Restrict)
   user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
-  @@unique([missaId, funcaoId, userId, vaga])
+  @@unique([missaId, funcaoId, userId]) // mesmo servidor não repete na mesma função/missa
+  @@unique([missaId, funcaoId, vaga])   // cada vaga tem no máximo um servidor
   @@index([missaId])
   @@index([userId, missaId])
+  @@index([funcaoId])
   @@map("escalas")
 }

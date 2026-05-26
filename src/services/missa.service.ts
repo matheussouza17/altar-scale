@@ -23,6 +23,24 @@ async function sincronizarFuncoesMissa(missaId: string, funcaoIds: string[]) {
   const remover = [...setAtual].filter((id) => !setNovo.has(id));
   const adicionar = [...setNovo].filter((id) => !setAtual.has(id));
 
+  if (remover.length > 0) {
+    const escalasOrfas = await prisma.escala.findMany({
+      where: { missaId, funcaoId: { in: remover } },
+      include: {
+        user: { select: { nome: true } },
+        funcao: { select: { nome: true } },
+      },
+    });
+    if (escalasOrfas.length > 0) {
+      const detalhes = escalasOrfas.map((e) => `${e.user.nome} (${e.funcao.nome})`).join(", ");
+      throw new AppError(
+        `Remova as escalas antes de desativar a função: ${detalhes}.`,
+        409,
+        "ESCALAS_EXISTENTES",
+      );
+    }
+  }
+
   await prisma.$transaction([
     ...remover.map((funcaoId) =>
       prisma.missaFuncao.delete({ where: { missaId_funcaoId: { missaId, funcaoId } } }),

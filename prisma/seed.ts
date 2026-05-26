@@ -4,16 +4,16 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 const FUNCOES = [
-  { codigo: "MC", nome: "Mestre de Cerimônias", ordem: 10, padrao: true },
-  { codigo: "CREDENCIA", nome: "Credência", ordem: 20, padrao: true },
-  { codigo: "ALTAR", nome: "Altar", ordem: 30, padrao: true },
-  { codigo: "MICROFONE", nome: "Microfone", ordem: 40, padrao: true },
-  { codigo: "MISSAL", nome: "Missal", ordem: 50, padrao: true },
-  { codigo: "CRUZ", nome: "Cruz", ordem: 60, padrao: true },
-  { codigo: "CEROFERARIO", nome: "Ceroferário", ordem: 70, padrao: true },
-  { codigo: "TURIBULO", nome: "Turíbulo", ordem: 80, padrao: false },
-  { codigo: "NAVETA", nome: "Naveta", ordem: 90, padrao: false },
-  { codigo: "CARRILHAO", nome: "Carrilhão", ordem: 100, padrao: false },
+  { codigo: "MC",         nome: "Mestre de Cerimônias", ordem: 10,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "CREDENCIA",  nome: "Credência",             ordem: 20,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "ALTAR",      nome: "Altar",                 ordem: 30,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "MICROFONE",  nome: "Microfone",             ordem: 40,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "MISSAL",     nome: "Missal",                ordem: 50,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "CRUZ",       nome: "Cruz",                  ordem: 60,  padrao: true,  quantidadePadrao: 1 },
+  { codigo: "CEROFERARIO",nome: "Ceroferário",           ordem: 70,  padrao: true,  quantidadePadrao: 2 },
+  { codigo: "TURIBULO",   nome: "Turíbulo",              ordem: 80,  padrao: false, quantidadePadrao: 1 },
+  { codigo: "NAVETA",     nome: "Naveta",                ordem: 90,  padrao: false, quantidadePadrao: 1 },
+  { codigo: "CARRILHAO",  nome: "Carrilhão",             ordem: 100, padrao: false, quantidadePadrao: 1 },
 ] as const;
 
 async function seedAdmin() {
@@ -45,7 +45,7 @@ async function main() {
     await prisma.funcao.upsert({
       where: { codigo: f.codigo },
       create: f,
-      update: { nome: f.nome, ordem: f.ordem, padrao: f.padrao, ativo: true },
+      update: { nome: f.nome, ordem: f.ordem, padrao: f.padrao, quantidadePadrao: f.quantidadePadrao, ativo: true },
     });
   }
   console.log(`Seed: ${FUNCOES.length} funções sincronizadas.`);

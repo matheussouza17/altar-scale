@@ -6,7 +6,12 @@ import { authenticate, requireRole } from "../middleware/auth.js";
 import * as disponibilidadeService from "../services/disponibilidade.service.js";
 import * as escalaService from "../services/escala.service.js";
 import * as missaService from "../services/missa.service.js";
-import { createEscalaSchema, escalaQuerySchema } from "../validators/escala.validator.js";
+import {
+  createEscalaSchema,
+  escalaIdParamSchema,
+  escalaQuerySchema,
+  updateEscalaSchema,
+} from "../validators/escala.validator.js";
 import {
   createMissaSchema,
   missaFuncoesSchema,
@@ -49,6 +54,19 @@ missasRouter.post(
     const body = createMissaSchema.parse(req.body);
     const missa = await missaService.criarMissa(body);
     res.status(201).json({ data: missa });
+  }),
+);
+
+/**
+ * GET /api/missas/minhas
+ * Resumo das próximas missas para o servidor autenticado.
+ * Deve ficar ANTES das rotas /:missaId para não ser capturado como parâmetro.
+ */
+missasRouter.get(
+  "/minhas",
+  asyncHandler(async (req, res) => {
+    const data = await escalaService.resumoProximasMissasServidor(req.user!.id);
+    res.json({ data });
   }),
 );
 
@@ -103,6 +121,18 @@ missasRouter.delete(
       .parse(req.params);
     const result = await escalaService.removerEscala(missaId, escalaId);
     res.json({ data: result });
+  }),
+);
+
+/** PATCH /api/missas/:missaId/escalas/:escalaId — atualiza observação da escala */
+missasRouter.patch(
+  "/:missaId/escalas/:escalaId",
+  staffOnly,
+  asyncHandler(async (req, res) => {
+    const { missaId, escalaId } = escalaIdParamSchema.parse(req.params);
+    const { observacao } = updateEscalaSchema.parse(req.body);
+    const escala = await escalaService.atualizarObservacaoEscala(missaId, escalaId, observacao);
+    res.json({ data: escala });
   }),
 );
 

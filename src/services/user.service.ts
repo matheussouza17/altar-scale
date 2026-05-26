@@ -1,7 +1,10 @@
 import { PapelUsuario } from "@prisma/client";
+import bcrypt from "bcryptjs";
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import type { AuthUser } from "../types/express.js";
+
+const BCRYPT_ROUNDS = 12;
 
 const userPublicSelect = {
   id: true,
@@ -102,6 +105,55 @@ export async function excluirUsuario(alvoId: string, solicitante: AuthUser) {
 
   await prisma.user.delete({ where: { id: alvoId } });
   return { excluido: true };
+}
+
+/** Troca de senha pelo próprio usuário autenticado. Exige senha atual correta. */
+export async function alterarSenha(
+  userId: string,
+  input: { senhaAtual: string; novaSenha: string },
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError("Usuário não encontrado.", 404, "USER_NOT_FOUND");
+
+  const ok = await bcrypt.compare(input.senhaAtual, user.passwordHash);
+  if (!ok) throw new AppError("Senha atual incorreta.", 401, "WRONG_PASSWORD");
+
+  const hash = await bcrypt.hash(input.novaSenha, BCRYPT_ROUNDS);
+  await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } });
+  return { ok: true };
+}
+
+/**
+ * Reset de senha pelo coordenador/admin em nome de outro usuário.
+ * O coordenador define a senha temporária e comunica ao servidor.
+ */
+export async function resetarSenha(
+  alvoId: string,
+  novaSenha: string,
+  solicitante: AuthUser,
+) {
+  if (alvoId === solicitante.id) {
+    throw new AppError(
+      "Use a troca de senha normal para alterar a própria senha.",
+      400,
+      "USE_CHANGE_PASSWORD",
+    );
+  }
+
+  const alvo = await prisma.user.findUnique({ where: { id: alvoId } });
+  if (!alvo) throw new AppError("Usuário não encontrado.", 404, "USER_NOT_FOUND");
+
+  if (solicitante.papel === PapelUsuario.COORDENADOR && alvo.papel !== PapelUsuario.SERVIDOR) {
+    throw new AppError("Coordenadores só podem resetar senhas de servidores.", 403, "FORBIDDEN");
+  }
+
+  if (alvo.papel === PapelUsuario.ADMIN) {
+    throw new AppError("Não é permitido resetar senha de administradores.", 403, "FORBIDDEN");
+  }
+
+  const hash = await bcrypt.hash(novaSenha, BCRYPT_ROUNDS);
+  await prisma.user.update({ where: { id: alvoId }, data: { passwordHash: hash } });
+  return { ok: true };
 }
 
 export async function atualizarStatusUsuario(

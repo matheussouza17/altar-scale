@@ -3,12 +3,6 @@ import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import type { DisponibilidadeBulkInput } from "../validators/disponibilidade.validator.js";
 
-/** Converte "2025-06" em Date UTC dia 1 do mês (armazenamento mesAno). */
-export function parseMesAno(mesAno: string): Date {
-  const [y, m] = mesAno.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, 1));
-}
-
 export function parseDataIso(data: string): Date {
   const [y, m, d] = data.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
@@ -17,9 +11,6 @@ export function parseDataIso(data: string): Date {
 /**
  * Retorna servidores DISPONÍVEIS para a data/horário da missa.
  * Usado pelo coordenador no combobox ao escalar uma função.
- *
- * Regra: status DISPONIVEL + user ativo + papel SERVIDOR (ou todos não-coordenadores).
- * mesAno: mês civil da data da missa (disponibilidade é coletada para o mês da celebração).
  */
 export async function listarServidoresDisponiveisParaMissa(missaId: string) {
   const missa = await prisma.missa.findUnique({
@@ -35,17 +26,12 @@ export async function listarServidoresDisponiveisParaMissa(missaId: string) {
     throw new AppError("Missa inativa.", 400, "MISSA_INACTIVE");
   }
 
-  const mesAno = new Date(
-    Date.UTC(missa.data.getUTCFullYear(), missa.data.getUTCMonth(), 1),
-  );
-
   const disponiveis = await prisma.user.findMany({
     where: {
       ativo: true,
       papel: { in: ["SERVIDOR", "COORDENADOR"] },
       disponibilidades: {
         some: {
-          mesAno,
           data: missa.data,
           horario: missa.horario,
           status: StatusDisponibilidade.DISPONIVEL,
@@ -77,14 +63,12 @@ export async function listarServidoresDisponiveisParaMissa(missaId: string) {
       titulo: missa.titulo,
       tipo: missa.tipo,
     },
-    mesAno: mesAno.toISOString().slice(0, 7),
     total: disponiveis.length,
     servidores: disponiveis.map((s) => ({
       id: s.id,
       nome: s.nome,
       email: s.email,
       telefone: s.telefone,
-      /** Funções já atribuídas nesta missa (acúmulo permitido). */
       funcoesNaMissa: s.escalas.map((e) => ({
         funcaoId: e.funcaoId,
         codigo: e.funcao.codigo,
@@ -96,8 +80,7 @@ export async function listarServidoresDisponiveisParaMissa(missaId: string) {
 }
 
 /**
- * Variante com filtro opcional por função: exclui quem já ocupa todas as vagas
- * daquela função (quando quantidade na MissaFuncao está cheia).
+ * Variante com filtro por função: exclui quem já está nessa função e calcula vagas restantes.
  */
 export async function listarServidoresDisponiveisParaMissaFuncao(
   missaId: string,
@@ -132,12 +115,8 @@ export async function listarServidoresDisponiveisParaMissaFuncao(
   const vagasRestantes = Math.max(0, missaFuncao.quantidade - ocupadas);
 
   const servidores = base.servidores.map((s) => {
-    const atribuicoesFuncao = s.funcoesNaMissa.filter((f) => f.funcaoId === funcaoId);
-    return {
-      ...s,
-      jaEscaladoNestaFuncao: atribuicoesFuncao.length > 0,
-      podeAcumularOutraFuncao: true,
-    };
+    const jaEscaladoNestaFuncao = s.funcoesNaMissa.some((f) => f.funcaoId === funcaoId);
+    return { ...s, jaEscaladoNestaFuncao, podeAcumularOutraFuncao: true };
   });
 
   return {
@@ -157,24 +136,38 @@ export async function salvarDisponibilidadesUsuario(
   userId: string,
   input: DisponibilidadeBulkInput,
 ) {
-  const mesAnoDate = parseMesAno(input.mesAno);
-
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError("Usuário não encontrado.", 404, "USER_NOT_FOUND");
+
+  // Valida que cada (data, horário) corresponde a uma missa existente e ativa
+  const pares = input.itens.map((i) => ({ data: parseDataIso(i.data), horario: i.horario }));
+  const missasExistentes = await prisma.missa.findMany({
+    where: { ativa: true, OR: pares.map((p) => ({ data: p.data, horario: p.horario })) },
+    select: { data: true, horario: true },
+  });
+  const missasSet = new Set(
+    missasExistentes.map((m) => `${m.data.toISOString().split("T")[0]}_${m.horario}`),
+  );
+  const invalidas = input.itens.filter((i) => !missasSet.has(`${i.data}_${i.horario}`));
+  if (invalidas.length > 0) {
+    throw new AppError(
+      `Não há missa cadastrada em: ${invalidas.map((i) => `${i.data} ${i.horario}`).join(", ")}.`,
+      400,
+      "MISSA_NOT_FOUND",
+    );
+  }
 
   const operations = input.itens.map((item) =>
     prisma.disponibilidade.upsert({
       where: {
-        userId_mesAno_data_horario: {
+        userId_data_horario: {
           userId,
-          mesAno: mesAnoDate,
           data: parseDataIso(item.data),
           horario: item.horario,
         },
       },
       create: {
         userId,
-        mesAno: mesAnoDate,
         data: parseDataIso(item.data),
         horario: item.horario,
         status: item.status,
@@ -193,7 +186,13 @@ export async function listarDisponibilidadesUsuario(
   mesAno?: string,
 ) {
   const where: Prisma.DisponibilidadeWhereInput = { userId };
-  if (mesAno) where.mesAno = parseMesAno(mesAno);
+  if (mesAno) {
+    const [y, m] = mesAno.split("-").map(Number);
+    where.data = {
+      gte: new Date(Date.UTC(y, m - 1, 1)),
+      lte: new Date(Date.UTC(y, m, 0)),
+    };
+  }
 
   return prisma.disponibilidade.findMany({
     where,
