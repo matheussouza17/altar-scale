@@ -7,38 +7,13 @@ import * as userService from "../services/user.service.js";
 import {
   alterarSenhaSchema,
   criarUsuarioSchema,
+  definirSenhaSchema,
   loginSchema,
-  registerSchema,
 } from "../validators/auth.validator.js";
+import { z } from "zod";
 
 export const authRouter = Router();
 
-/**
- * @openapi
- * /auth/login:
- *   post:
- *     tags: [Auth]
- *     summary: Login com e-mail e senha
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [email, senha]
- *             properties:
- *               email: { type: string, format: email }
- *               senha: { type: string }
- *     responses:
- *       200:
- *         description: Token JWT (payload contém id, email, nome, telefone, papel)
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token: { type: string }
- */
 authRouter.post(
   "/login",
   asyncHandler(async (req, res) => {
@@ -48,31 +23,6 @@ authRouter.post(
   }),
 );
 
-/**
- * @openapi
- * /auth/register:
- *   post:
- *     tags: [Auth]
- *     summary: Cadastro de servidor (papel SERVIDOR)
- */
-authRouter.post(
-  "/register",
-  asyncHandler(async (req, res) => {
-    const body = registerSchema.parse(req.body);
-    const token = await authService.register(body);
-    res.status(201).json({ token });
-  }),
-);
-
-/**
- * @openapi
- * /auth/me:
- *   get:
- *     tags: [Auth]
- *     summary: Perfil do usuário autenticado
- *     security:
- *       - bearerAuth: []
- */
 authRouter.get(
   "/me",
   authenticate,
@@ -82,45 +32,39 @@ authRouter.get(
   }),
 );
 
-/**
- * @openapi
- * /auth/usuarios:
- *   post:
- *     tags: [Auth]
- *     summary: Coordenador/Admin cria usuário com senha
- *     security:
- *       - bearerAuth: []
- */
+/** Coordenador/Admin cria usuário — envia email com link para definir senha */
 authRouter.post(
   "/usuarios",
   authenticate,
   requireRole(PapelUsuario.COORDENADOR, PapelUsuario.ADMIN),
   asyncHandler(async (req, res) => {
     const body = criarUsuarioSchema.parse(req.body);
-    const token = await authService.criarUsuario(body, req.user!.papel);
-    res.status(201).json({ token });
+    const result = await authService.criarUsuario(body, req.user!.papel);
+    res.status(201).json({ data: result });
   }),
 );
 
-/**
- * @openapi
- * /auth/senha:
- *   patch:
- *     tags: [Auth]
- *     summary: Usuário autenticado altera a própria senha
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [senhaAtual, novaSenha]
- *             properties:
- *               senhaAtual: { type: string }
- *               novaSenha: { type: string, minLength: 8 }
- */
+/** Solicita redefinição de senha — público, sempre retorna 200 (não revela se email existe) */
+authRouter.post(
+  "/solicitar-reset",
+  asyncHandler(async (req, res) => {
+    const { email } = z.object({ email: z.string().email() }).parse(req.body);
+    await authService.solicitarResetSenha(email);
+    res.json({ ok: true });
+  }),
+);
+
+/** Usuário define/redefine a própria senha via token recebido por email */
+authRouter.post(
+  "/definir-senha",
+  asyncHandler(async (req, res) => {
+    const { token, novaSenha } = definirSenhaSchema.parse(req.body);
+    const jwtToken = await authService.definirSenha(token, novaSenha);
+    res.json({ token: jwtToken });
+  }),
+);
+
+/** Usuário autenticado altera a própria senha */
 authRouter.patch(
   "/senha",
   authenticate,

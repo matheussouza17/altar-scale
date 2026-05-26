@@ -1,7 +1,7 @@
 import { PapelUsuario } from "@prisma/client";
 import { z } from "zod";
 
-const senhaSchema = z
+export const senhaSchema = z
   .string()
   .min(8, "Senha deve ter no mínimo 8 caracteres")
   .max(128);
@@ -11,15 +11,16 @@ export const loginSchema = z.object({
   senha: z.string().min(1),
 });
 
-export const registerSchema = z.object({
+export const criarUsuarioSchema = z.object({
   email: z.string().email(),
-  senha: senhaSchema,
   nome: z.string().min(2).max(120),
   telefone: z.string().max(20).optional(),
+  papel: z.nativeEnum(PapelUsuario).default(PapelUsuario.SERVIDOR),
 });
 
-export const criarUsuarioSchema = registerSchema.extend({
-  papel: z.nativeEnum(PapelUsuario).default(PapelUsuario.SERVIDOR),
+export const definirSenhaSchema = z.object({
+  token: z.string().min(1),
+  novaSenha: senhaSchema,
 });
 
 export const alterarSenhaSchema = z.object({
@@ -28,6 +29,6 @@ export const alterarSenhaSchema = z.object({
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
-export type RegisterInput = z.infer<typeof registerSchema>;
 export type CriarUsuarioInput = z.infer<typeof criarUsuarioSchema>;
+export type DefinirSenhaInput = z.infer<typeof definirSenhaSchema>;
 export type AlterarSenhaInput = z.infer<typeof alterarSenhaSchema>;

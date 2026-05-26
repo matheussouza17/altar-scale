@@ -1,7 +1,9 @@
 import { PapelUsuario } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
+import { enviarEmailResetSenha } from "./email.service.js";
 import type { AuthUser } from "../types/express.js";
 
 const BCRYPT_ROUNDS = 12;
@@ -124,17 +126,16 @@ export async function alterarSenha(
 }
 
 /**
- * Reset de senha pelo coordenador/admin em nome de outro usuário.
- * O coordenador define a senha temporária e comunica ao servidor.
+ * Coordenador/admin dispara email de redefinição de senha para um servidor.
+ * Gera um token com validade de 48 horas e envia por email.
  */
-export async function resetarSenha(
+export async function enviarEmailResetSenhaUsuario(
   alvoId: string,
-  novaSenha: string,
   solicitante: AuthUser,
 ) {
   if (alvoId === solicitante.id) {
     throw new AppError(
-      "Use a troca de senha normal para alterar a própria senha.",
+      "Use a opção de alterar senha para mudar a própria senha.",
       400,
       "USE_CHANGE_PASSWORD",
     );
@@ -151,8 +152,16 @@ export async function resetarSenha(
     throw new AppError("Não é permitido resetar senha de administradores.", 403, "FORBIDDEN");
   }
 
-  const hash = await bcrypt.hash(novaSenha, BCRYPT_ROUNDS);
-  await prisma.user.update({ where: { id: alvoId }, data: { passwordHash: hash } });
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiry = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: alvoId },
+    data: { passwordResetToken: token, passwordResetExpiry: expiry },
+  });
+
+  await enviarEmailResetSenha(alvo.email, alvo.nome, token);
+
   return { ok: true };
 }
 

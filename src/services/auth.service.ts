@@ -1,15 +1,14 @@
 import { PapelUsuario } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { AppError } from "../lib/errors.js";
 import { signAccessToken } from "../lib/jwt.js";
 import { prisma } from "../lib/prisma.js";
-import type {
-  CriarUsuarioInput,
-  LoginInput,
-  RegisterInput,
-} from "../validators/auth.validator.js";
+import { enviarEmailBoasVindas, enviarEmailResetSenha } from "./email.service.js";
+import type { CriarUsuarioInput, LoginInput } from "../validators/auth.validator.js";
 
 const BCRYPT_ROUNDS = 12;
+const TOKEN_EXPIRY_HOURS = 48;
 
 const userPublicSelect = {
   id: true,
@@ -21,12 +20,12 @@ const userPublicSelect = {
   createdAt: true,
 } as const;
 
-async function hashSenha(senha: string): Promise<string> {
-  return bcrypt.hash(senha, BCRYPT_ROUNDS);
+function gerarToken(): string {
+  return crypto.randomBytes(32).toString("hex");
 }
 
-async function validarSenha(senha: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(senha, hash);
+function expiryDe(horas: number): Date {
+  return new Date(Date.now() + horas * 60 * 60 * 1000);
 }
 
 export async function login(input: LoginInput) {
@@ -35,7 +34,15 @@ export async function login(input: LoginInput) {
     throw new AppError("E-mail ou senha incorretos.", 401, "INVALID_CREDENTIALS");
   }
 
-  const ok = await validarSenha(input.senha, user.passwordHash);
+  if (!user.passwordHash) {
+    throw new AppError(
+      "Senha não definida. Verifique seu email para o link de configuração.",
+      401,
+      "PASSWORD_NOT_SET",
+    );
+  }
+
+  const ok = await bcrypt.compare(input.senha, user.passwordHash);
   if (!ok) {
     throw new AppError("E-mail ou senha incorretos.", 401, "INVALID_CREDENTIALS");
   }
@@ -43,24 +50,12 @@ export async function login(input: LoginInput) {
   return signAccessToken(user);
 }
 
-/** Cadastro público: sempre cria SERVIDOR. */
-export async function register(input: RegisterInput) {
-  return criarUsuario({ ...input, papel: PapelUsuario.SERVIDOR });
-}
-
 export async function criarUsuario(
   input: CriarUsuarioInput,
   criadorPapel?: PapelUsuario,
 ) {
-  if (
-    criadorPapel === PapelUsuario.COORDENADOR &&
-    input.papel !== PapelUsuario.SERVIDOR
-  ) {
-    throw new AppError(
-      "Coordenadores só podem cadastrar servidores.",
-      403,
-      "FORBIDDEN",
-    );
+  if (criadorPapel === PapelUsuario.COORDENADOR && input.papel !== PapelUsuario.SERVIDOR) {
+    throw new AppError("Coordenadores só podem cadastrar servidores.", 403, "FORBIDDEN");
   }
 
   if (input.papel !== PapelUsuario.SERVIDOR && criadorPapel !== PapelUsuario.ADMIN) {
@@ -71,31 +66,82 @@ export async function criarUsuario(
     );
   }
 
-  if (
-    input.papel === PapelUsuario.ADMIN &&
-    criadorPapel !== PapelUsuario.ADMIN
-  ) {
-    throw new AppError("Somente admins podem criar outros admins.", 403, "FORBIDDEN");
-  }
-
   const email = input.email.toLowerCase();
   const existe = await prisma.user.findUnique({ where: { email } });
-  if (existe) {
-    throw new AppError("E-mail já cadastrado.", 409, "EMAIL_EXISTS");
-  }
+  if (existe) throw new AppError("E-mail já cadastrado.", 409, "EMAIL_EXISTS");
 
-  const user = await prisma.user.create({
+  const token = gerarToken();
+
+  await prisma.user.create({
     data: {
       email,
       nome: input.nome,
-      telefone: input.telefone,
+      telefone: input.telefone ?? null,
       papel: input.papel,
-      passwordHash: await hashSenha(input.senha),
+      passwordHash: "",
+      passwordResetToken: token,
+      passwordResetExpiry: expiryDe(TOKEN_EXPIRY_HOURS),
+    },
+  });
+
+  await enviarEmailBoasVindas(email, input.nome, token);
+
+  return { ok: true, email };
+}
+
+export async function solicitarResetSenha(email: string) {
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+  });
+
+  // Responde sempre com sucesso para não revelar se o email existe
+  if (!user || !user.ativo) return { ok: true };
+
+  const token = gerarToken();
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetToken: token,
+      passwordResetExpiry: expiryDe(TOKEN_EXPIRY_HOURS),
+    },
+  });
+
+  await enviarEmailResetSenha(user.email, user.nome, token);
+
+  return { ok: true };
+}
+
+export async function definirSenha(token: string, novaSenha: string) {
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: token,
+      passwordResetExpiry: { gt: new Date() },
+    },
+  });
+
+  if (!user) {
+    throw new AppError(
+      "Link inválido ou expirado. Solicite um novo ao coordenador.",
+      400,
+      "INVALID_TOKEN",
+    );
+  }
+
+  const hash = await bcrypt.hash(novaSenha, BCRYPT_ROUNDS);
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: hash,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+      ativo: true,
     },
     select: userPublicSelect,
   });
 
-  return signAccessToken(user);
+  return signAccessToken(updated);
 }
 
 export async function obterPerfil(userId: string) {

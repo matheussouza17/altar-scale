@@ -7,7 +7,6 @@ import {
   atualizarStatusUserSchema,
   editarUsuarioSchema,
   listarUsersQuerySchema,
-  resetarSenhaSchema,
   userIdParamSchema,
 } from "../validators/user.validator.js";
 
@@ -68,16 +67,14 @@ usersRouter.patch(
 );
 
 /**
- * PATCH /api/users/:userId/reset-senha
- * Coordenador/Admin define uma nova senha para o servidor.
- * O servidor usará PATCH /api/auth/senha para trocá-la depois.
+ * POST /api/users/:userId/enviar-reset
+ * Coordenador/Admin dispara email de redefinição de senha para o servidor.
  */
-usersRouter.patch(
-  "/:userId/reset-senha",
+usersRouter.post(
+  "/:userId/enviar-reset",
   asyncHandler(async (req, res) => {
     const { userId } = userIdParamSchema.parse(req.params);
-    const { novaSenha } = resetarSenhaSchema.parse(req.body);
-    const result = await userService.resetarSenha(userId, novaSenha, req.user!);
+    const result = await userService.enviarEmailResetSenhaUsuario(userId, req.user!);
     res.json({ data: result });
   }),
 );

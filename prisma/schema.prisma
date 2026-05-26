@@ -40,10 +40,12 @@ model User {
   passwordHash String       @map("password_hash")
   nome         String
   telefone     String?
-  ativo        Boolean      @default(true)
-  papel        PapelUsuario @default(SERVIDOR)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  ativo               Boolean      @default(true)
+  papel               PapelUsuario @default(SERVIDOR)
+  passwordResetToken  String?      @map("password_reset_token")
+  passwordResetExpiry DateTime?    @map("password_reset_expiry")
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
 
   disponibilidades Disponibilidade[]
   escalas          Escala[]
